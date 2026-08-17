@@ -1,0 +1,25 @@
+{
+  "name": "mini-order-system",
+  "version": "1.0.0",
+  "description": "A simple order tracking system built with Node.js, Express, and SQLite",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "init-db": "node src/db.js"
+  },
+  "keywords": [
+    "orders",
+    "express",
+    "sqlite",
+    "nodejs"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.10.0",
+    "express": "^4.21.2"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3"]
+  }
+}
