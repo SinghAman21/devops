@@ -10,6 +10,13 @@ const config = {
     topic: process.env.KAFKA_TOPIC || 'orders',
     groupId: process.env.KAFKA_GROUP_ID || 'order-service',
   },
+  cors: {
+    origin: process.env.CORS_ORIGIN || '*',
+  },
+  rateLimit: {
+    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 60000,
+    max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,
+  },
 };
 
 module.exports = config;

@@ -1,5 +1,8 @@
 const path = require('path');
 const express = require('express');
+const helmet = require('helmet');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const logger = require('./logger');
 const { initDatabase, getDb } = require('./db');
@@ -8,6 +11,19 @@ const errorHandler = require('./middleware/errorHandler');
 const { router: ordersRouter } = require('./orders');
 
 const app = express();
+
+// Security middleware
+app.use(helmet());
+app.use(cors({ origin: config.cors.origin }));
+app.use(
+  rateLimit({
+    windowMs: config.rateLimit.windowMs,
+    max: config.rateLimit.max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: { code: 'RATE_LIMIT', message: 'Too many requests' } },
+  })
+);
 
 // Middleware
 app.use(requestId);
