@@ -1,33 +1,66 @@
 const path = require('path');
 const express = require('express');
-const { initDatabase } = require('./db');
+const config = require('./config');
+const logger = require('./logger');
+const { initDatabase, getDb } = require('./db');
+const requestId = require('./middleware/requestId');
+const errorHandler = require('./middleware/errorHandler');
 const { router: ordersRouter } = require('./orders');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// Create/verify the SQLite database on startup.
-initDatabase();
-
-// Parse incoming JSON request bodies.
+// Middleware
+app.use(requestId);
 app.use(express.json());
 
-// Serve the frontend from the public/ directory.
+// Serve frontend
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Health check.
-app.get('/healthz', (req, res) => {
-  res.json({ status: 'ok' });
+// Health checks for K8s
+app.get('/healthz', (_req, res) => {
+  res.json({ success: true, data: { status: 'ok' } });
 });
 
-// Order routes.
+app.get('/readyz', (_req, res) => {
+  try {
+    getDb().prepare('SELECT 1').get();
+    res.json({ success: true, data: { status: 'ready' } });
+  } catch {
+    res.status(503).json({ success: false, error: { code: 'NOT_READY', message: 'Database unavailable' } });
+  }
+});
+
+// Routes
 app.use('/orders', ordersRouter);
 
-// Catch-all 404 for unknown API routes.
-app.use((req, res) => {
-  res.status(404).json({ error: 'Not found' });
+// 404 for unknown API routes
+app.use('/api', (_req, res) => {
+  res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Route not found' } });
 });
 
-app.listen(PORT, () => {
-  console.log(`Mini Order System running at http://localhost:${PORT}`);
+// Error handler
+app.use(errorHandler);
+
+// Initialize DB and start server
+initDatabase();
+
+const server = app.listen(config.port, () => {
+  logger.info({ port: config.port, env: config.nodeEnv }, 'Server started');
 });
+
+// Graceful shutdown for K8s SIGTERM
+function shutdown(signal) {
+  logger.info({ signal }, 'Received signal, shutting down gracefully');
+  server.close(() => {
+    logger.info('HTTP server closed');
+    process.exit(0);
+  });
+  // Force exit after 10s
+  setTimeout(() => {
+    logger.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

@@ -1,6 +1,9 @@
 const { randomUUID } = require('crypto');
 const { Router } = require('express');
+const { z } = require('zod');
 const { getDb } = require('./db');
+const logger = require('./logger');
+const validate = require('./middleware/validate');
 
 const router = Router();
 
@@ -14,21 +17,19 @@ const ALLOWED_STATUSES = [
   'FAILED',
 ];
 
+const createOrderSchema = z.object({
+  productId: z.string().min(1, 'productId is required'),
+  quantity: z.number().int().positive('quantity must be a positive integer'),
+  customerEmail: z.string().email('customerEmail must be a valid email'),
+});
+
+const updateStatusSchema = z.object({
+  status: z.enum(ALLOWED_STATUSES, { error: `status must be one of: ${ALLOWED_STATUSES.join(', ')}` }),
+});
+
 // POST /orders — create a new order in PENDING status.
-router.post('/', (req, res) => {
-  const { productId, quantity, customerEmail } = req.body || {};
-
-  if (!productId || typeof productId !== 'string') {
-    return res.status(400).json({ error: 'productId is required and must be a string' });
-  }
-
-  if (!Number.isInteger(quantity) || quantity <= 0) {
-    return res.status(400).json({ error: 'quantity must be an integer greater than 0' });
-  }
-
-  if (!customerEmail || typeof customerEmail !== 'string' || !customerEmail.includes('@')) {
-    return res.status(400).json({ error: 'customerEmail must be a valid email address' });
-  }
+router.post('/', validate(createOrderSchema), (req, res) => {
+  const { productId, quantity, customerEmail } = req.body;
 
   const now = new Date().toISOString();
   const order = {
@@ -48,10 +49,12 @@ router.post('/', (req, res) => {
       `INSERT INTO orders (id, product_id, quantity, customer_email, status, failure_reason, created_at, updated_at)
        VALUES (@id, @product_id, @quantity, @customer_email, @status, @failure_reason, @created_at, @updated_at)`
     ).run(order);
-    return res.status(201).json(order);
+
+    logger.info({ requestId: req.requestId, orderId: order.id }, 'Order created');
+    return res.status(201).json({ success: true, data: order });
   } catch (err) {
-    console.error('Failed to create order:', err);
-    return res.status(500).json({ error: 'Failed to create order' });
+    logger.error({ requestId: req.requestId, err }, 'Failed to create order');
+    return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to create order' } });
   }
 });
 
@@ -60,10 +63,10 @@ router.get('/', (req, res) => {
   try {
     const db = getDb();
     const orders = db.prepare('SELECT * FROM orders ORDER BY created_at DESC, id DESC').all();
-    return res.json(orders);
+    return res.json({ success: true, data: orders, meta: { total: orders.length } });
   } catch (err) {
-    console.error('Failed to list orders:', err);
-    return res.status(500).json({ error: 'Failed to list orders' });
+    logger.error({ requestId: req.requestId, err }, 'Failed to list orders');
+    return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to list orders' } });
   }
 });
 
@@ -73,43 +76,36 @@ router.get('/:id', (req, res) => {
     const db = getDb();
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
     if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } });
     }
-    return res.json(order);
+    return res.json({ success: true, data: order });
   } catch (err) {
-    console.error('Failed to get order:', err);
-    return res.status(500).json({ error: 'Failed to get order' });
+    logger.error({ requestId: req.requestId, err, orderId: req.params.id }, 'Failed to get order');
+    return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to get order' } });
   }
 });
 
 // PATCH /orders/:id/status — manually set an order's status.
 // Temporary endpoint for local simulation before Kafka workers take over.
-router.patch('/:id/status', (req, res) => {
-  const { status } = req.body || {};
-
-  if (!status || !ALLOWED_STATUSES.includes(status)) {
-    return res.status(400).json({
-      error: `status must be one of: ${ALLOWED_STATUSES.join(', ')}`,
-    });
-  }
+router.patch('/:id/status', validate(updateStatusSchema), (req, res) => {
+  const { status } = req.body;
 
   try {
     const db = getDb();
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
     if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
+      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } });
     }
 
     const updated = new Date().toISOString();
-    db.prepare(
-      `UPDATE orders SET status = ?, updated_at = ? WHERE id = ?`
-    ).run(status, updated, req.params.id);
+    db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(status, updated, req.params.id);
 
     const result = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
-    return res.json(result);
+    logger.info({ requestId: req.requestId, orderId: req.params.id, status }, 'Order status updated');
+    return res.json({ success: true, data: result });
   } catch (err) {
-    console.error('Failed to update order status:', err);
-    return res.status(500).json({ error: 'Failed to update order status' });
+    logger.error({ requestId: req.requestId, err, orderId: req.params.id }, 'Failed to update order status');
+    return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to update order status' } });
   }
 });
 
