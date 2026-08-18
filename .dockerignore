@@ -1,0 +1,14 @@
+node_modules
+npm-debug.log
+pnpm-debug.log
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.db
+Dockerfile
+docker-compose*.yml
+.dockerignore
+README.md
+public
