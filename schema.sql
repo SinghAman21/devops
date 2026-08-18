@@ -5,14 +5,14 @@
 -- update statuses manually via the PATCH endpoint.
 
 CREATE TABLE IF NOT EXISTS orders (
-    id              TEXT PRIMARY KEY,
-    product_id      TEXT NOT NULL,
+    id              VARCHAR(36) PRIMARY KEY,
+    product_id      VARCHAR(255) NOT NULL,
     quantity        INTEGER NOT NULL CHECK (quantity > 0),
-    customer_email  TEXT NOT NULL,
-    status          TEXT NOT NULL,
+    customer_email  VARCHAR(255) NOT NULL,
+    status          VARCHAR(50) NOT NULL,
     failure_reason  TEXT,
-    created_at      TEXT NOT NULL,
-    updated_at      TEXT NOT NULL
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Index to keep GET /orders (ordered by created_at desc) fast

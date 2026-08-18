@@ -5,7 +5,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const logger = require('./logger');
-const { initDatabase, getDb } = require('./db');
+const { initDatabase, getDb, closeDatabase } = require('./db');
 const requestId = require('./middleware/requestId');
 const errorHandler = require('./middleware/errorHandler');
 const { router: ordersRouter } = require('./orders');
@@ -37,9 +37,9 @@ app.get('/healthz', (_req, res) => {
   res.json({ success: true, data: { status: 'ok' } });
 });
 
-app.get('/readyz', (_req, res) => {
+app.get('/readyz', async (_req, res) => {
   try {
-    getDb().prepare('SELECT 1').get();
+    await getDb().query('SELECT 1');
     res.json({ success: true, data: { status: 'ready' } });
   } catch {
     res.status(503).json({ success: false, error: { code: 'NOT_READY', message: 'Database unavailable' } });
@@ -57,21 +57,14 @@ app.use('/api', (_req, res) => {
 // Error handler
 app.use(errorHandler);
 
-// Initialize DB and start server
-initDatabase();
-
-const server = app.listen(config.port, () => {
-  logger.info({ port: config.port, env: config.nodeEnv }, 'Server started');
-});
-
 // Graceful shutdown for K8s SIGTERM
-function shutdown(signal) {
+async function shutdown(signal) {
   logger.info({ signal }, 'Received signal, shutting down gracefully');
-  server.close(() => {
+  server.close(async () => {
+    await closeDatabase();
     logger.info('HTTP server closed');
     process.exit(0);
   });
-  // Force exit after 10s
   setTimeout(() => {
     logger.error('Forced shutdown after timeout');
     process.exit(1);
@@ -80,3 +73,17 @@ function shutdown(signal) {
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+
+// Initialize DB and start server
+let server;
+
+initDatabase()
+  .then(() => {
+    server = app.listen(config.port, () => {
+      logger.info({ port: config.port, env: config.nodeEnv }, 'Server started');
+    });
+  })
+  .catch((err) => {
+    logger.error({ err }, 'Failed to start server');
+    process.exit(1);
+  });

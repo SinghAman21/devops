@@ -3,7 +3,7 @@ const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   logLevel: process.env.LOG_LEVEL || 'info',
   database: {
-    path: process.env.DATABASE_PATH || './orders.db',
+    url: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/mini_order',
   },
   kafka: {
     brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
