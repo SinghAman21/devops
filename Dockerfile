@@ -16,6 +16,6 @@ COPY src ./src
 COPY schema.sql ./
 RUN chown -R appuser:appgroup /app
 USER appuser
-EXPOSE 3000
+EXPOSE 8000
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "src/server.js"]

@@ -1,3 +1,5 @@
+const API_BASE_URL = 'http://localhost:8000';
+
 const ALLOWED_STATUSES = [
   'PENDING',
   'PAYMENT_COMPLETED',
@@ -25,21 +27,22 @@ form.addEventListener('submit', async (event) => {
   };
 
   try {
-    const response = await fetch('/orders', {
+    const response = await fetch(`${API_BASE_URL}/orders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
-    const data = await response.json();
-    if (!response.ok) {
-      showMessage(data.error || 'Failed to create order', 'error');
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      showMessage(result.error?.message || 'Failed to create order', 'error');
       return;
     }
 
+    const order = result.data;
     form.reset();
     form.quantity.value = 1;
-    showMessage(`Order ${data.id.slice(0, 8)}... created with status ${data.status}.`, 'success');
+    showMessage(`Order ${order.id.slice(0, 8)}... created with status ${order.status}.`, 'success');
     await loadOrders();
   } catch (err) {
     showMessage('Network error while creating order.', 'error');
@@ -48,9 +51,9 @@ form.addEventListener('submit', async (event) => {
 
 async function loadOrders() {
   try {
-    const response = await fetch('/orders');
-    const orders = await response.json();
-    renderOrders(orders);
+    const response = await fetch(`${API_BASE_URL}/orders`);
+    const result = await response.json();
+    renderOrders(result.data || []);
   } catch (err) {
     showMessage('Failed to load orders.', 'error');
   }
@@ -120,15 +123,15 @@ function statusControls(order) {
 async function updateStatus(id, status, button) {
   button.disabled = true;
   try {
-    const response = await fetch(`/orders/${id}/status`, {
+    const response = await fetch(`${API_BASE_URL}/orders/${id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
 
-    const data = await response.json();
-    if (!response.ok) {
-      alert(data.error || 'Failed to update status');
+    const result = await response.json();
+    if (!response.ok || !result.success) {
+      alert(result.error?.message || 'Failed to update status');
     } else {
       await loadOrders();
     }

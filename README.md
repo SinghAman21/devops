@@ -53,7 +53,8 @@ cp .env.example .env
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3000` | Server port |
+| `PORT` | `8000` | Backend API port |
+| `FRONTEND_PORT` | `3000` | Frontend static server port |
 | `NODE_ENV` | `development` | `development` enables pretty logs |
 | `LOG_LEVEL` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
 | `DATABASE_PATH` | `./orders.db` | SQLite database file path |
@@ -74,19 +75,21 @@ pnpm run init-db
 
 This creates `orders.db` and applies `schema.sql` (the `orders` table and its indexes).
 
-## Start the server
+## Start the app
+
+Run the backend API on <http://localhost:8000>:
 
 ```bash
-pnpm start
+pnpm run dev:backend
 ```
 
-Or with auto-reload during development:
+In a second terminal, run the frontend on <http://localhost:3000>:
 
 ```bash
-pnpm run dev
+pnpm run dev:frontend
 ```
 
-Then open <http://localhost:3000> for the frontend.
+Open <http://localhost:3000> for the frontend. The frontend calls the backend API at <http://localhost:8000>.
 
 ## API
 
@@ -106,16 +109,16 @@ Every response includes an `X-Request-ID` header for distributed tracing.
 
 ```bash
 # Liveness — is the process alive?
-curl http://localhost:3000/healthz
+curl http://localhost:8000/healthz
 
 # Readiness — can it accept traffic? (checks DB connection)
-curl http://localhost:3000/readyz
+curl http://localhost:8000/readyz
 ```
 
 ### Create an order
 
 ```bash
-curl -X POST http://localhost:3000/orders \
+curl -X POST http://localhost:8000/orders \
   -H "Content-Type: application/json" \
   -d '{"productId": "macbook-pro", "quantity": 1, "customerEmail": "aman@example.com"}'
 ```
@@ -125,7 +128,7 @@ Returns `201` with the created order (status `PENDING`).
 ### List all orders (newest first)
 
 ```bash
-curl http://localhost:3000/orders
+curl http://localhost:8000/orders
 ```
 
 Returns `{ success, data: [...], meta: { total } }`.
@@ -133,7 +136,7 @@ Returns `{ success, data: [...], meta: { total } }`.
 ### Get one order
 
 ```bash
-curl http://localhost:3000/orders/<order-id>
+curl http://localhost:8000/orders/<order-id>
 ```
 
 Returns `404` if the order does not exist.
@@ -141,7 +144,7 @@ Returns `404` if the order does not exist.
 ### Update an order's status (manual simulation)
 
 ```bash
-curl -X PATCH http://localhost:3000/orders/<order-id>/status \
+curl -X PATCH http://localhost:8000/orders/<order-id>/status \
   -H "Content-Type: application/json" \
   -d '{"status": "CONFIRMED"}'
 ```

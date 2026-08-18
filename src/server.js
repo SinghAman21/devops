@@ -1,4 +1,3 @@
-const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -29,8 +28,6 @@ app.use(
 app.use(requestId);
 app.use(express.json());
 
-// Serve frontend
-app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Health checks for K8s
 app.get('/healthz', (_req, res) => {
@@ -49,8 +46,8 @@ app.get('/readyz', async (_req, res) => {
 // Routes
 app.use('/orders', ordersRouter);
 
-// 404 for unknown API routes
-app.use('/api', (_req, res) => {
+// 404 for unknown backend routes
+app.use((_req, res) => {
   res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Route not found' } });
 });
 

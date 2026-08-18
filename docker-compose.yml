@@ -18,8 +18,9 @@ services:
   api:
     build: .
     ports:
-      - "3000:3000"
+      - "8000:8000"
     environment:
+      PORT: 8000
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/mini_order
       NODE_ENV: production
       LOG_LEVEL: info

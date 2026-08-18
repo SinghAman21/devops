@@ -5,7 +5,10 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+    "start:be": "node src/server.js",
+    "start:fe": "node src/frontend.js",
+    "dev:be": "node --watch src/server.js",
+    "dev:fe": "node --watch src/frontend.js",
     "init-db": "node src/db.js"
   },
   "keywords": [
