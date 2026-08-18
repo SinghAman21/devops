@@ -155,3 +155,59 @@ Same for packages in `package.json` — use lock files.
 - [ ] `tini` for signal handling
 - [ ] Pin versions
 - [ ] Don't store secrets in image
+
+---
+
+## Running This Project with Docker
+
+### Start everything (PostgreSQL + API)
+
+```bash
+docker compose up -d
+```
+
+This starts:
+- PostgreSQL on port `5432`
+- API on port `3000`
+
+### Check if it's running
+
+```bash
+docker compose ps
+curl http://localhost:3000/healthz
+```
+
+### View logs
+
+```bash
+docker compose logs -f api       # API logs
+docker compose logs -f postgres  # PostgreSQL logs
+```
+
+### Stop everything
+
+```bash
+docker compose down
+```
+
+### Stop and delete data
+
+```bash
+docker compose down -v
+```
+
+### Rebuild after code changes
+
+```bash
+docker compose up -d --build
+```
+
+### Run locally without Docker
+
+```bash
+# Start only PostgreSQL
+docker compose up -d postgres
+
+# Start API locally
+pnpm dev
+```
