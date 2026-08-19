@@ -12,3 +12,7 @@ docker-compose*.yml
 .dockerignore
 README.md
 public
+
+how to apply k8s in this system. so far have i have one image for the whole backend.
+but in future we will need to scale multiple pods up and down for services(considering /order, /customer, /product all 3 as big service)
+so should i create multiple images for that? or what is the correct production behavior?

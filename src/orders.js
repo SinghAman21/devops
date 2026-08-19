@@ -18,9 +18,9 @@ const ALLOWED_STATUSES = [
 ];
 
 const createOrderSchema = z.object({
-  productId: z.string().min(1, 'productId is required'),
+  productId: z.string().uuid('productId must be a valid UUID'),
   quantity: z.number().int().positive('quantity must be a positive integer'),
-  customerEmail: z.string().email('customerEmail must be a valid email'),
+  customerId: z.string().uuid('customerId must be a valid UUID'),
 });
 
 const updateStatusSchema = z.object({
@@ -29,17 +29,28 @@ const updateStatusSchema = z.object({
 
 // POST /orders — create a new order in PENDING status.
 router.post('/', validate(createOrderSchema), async (req, res) => {
-  const { productId, quantity, customerEmail } = req.body;
+  const { productId, quantity, customerId } = req.body;
   const id = randomUUID();
   const now = new Date();
 
   try {
     const db = getDb();
+
+    const productCheck = await db.query('SELECT id FROM products WHERE id = $1', [productId]);
+    if (productCheck.rows.length === 0) {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_PRODUCT', message: 'Product not found' } });
+    }
+
+    const customerCheck = await db.query('SELECT id FROM customers WHERE id = $1', [customerId]);
+    if (customerCheck.rows.length === 0) {
+      return res.status(400).json({ success: false, error: { code: 'INVALID_CUSTOMER', message: 'Customer not found' } });
+    }
+
     const result = await db.query(
-      `INSERT INTO orders (id, product_id, quantity, customer_email, status, failure_reason, created_at, updated_at)
+      `INSERT INTO orders (id, product_id, quantity, customer_id, status, failure_reason, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [id, productId, quantity, customerEmail, 'PENDING', null, now, now]
+      [id, productId, quantity, customerId, 'PENDING', null, now, now]
     );
 
     logger.info({ requestId: req.requestId, orderId: id }, 'Order created');

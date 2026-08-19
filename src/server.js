@@ -8,6 +8,8 @@ const { initDatabase, getDb, closeDatabase } = require('./db');
 const requestId = require('./middleware/requestId');
 const errorHandler = require('./middleware/errorHandler');
 const { router: ordersRouter } = require('./orders');
+const { router: productsRouter } = require('./products');
+const { router: customersRouter } = require('./customers');
 
 const app = express();
 
@@ -45,6 +47,8 @@ app.get('/readyz', async (_req, res) => {
 
 // Routes
 app.use('/orders', ordersRouter);
+app.use('/products', productsRouter);
+app.use('/customers', customersRouter);
 
 // 404 for unknown backend routes
 app.use((_req, res) => {
