@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: mini-order-backend:1.0.0
+          image: amansingh21/mini-order-backend:1.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
