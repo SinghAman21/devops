@@ -1,0 +1,71 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: orders-created
+  namespace: mini-order
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  topicName: orders.created
+  partitions: 3
+  replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: orders-payment
+  namespace: mini-order
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  topicName: orders.payment
+  partitions: 3
+  replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: orders-inventory
+  namespace: mini-order
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  topicName: orders.inventory
+  partitions: 3
+  replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: orders-created-dlq
+  namespace: mini-order
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  topicName: orders.created.dlq
+  partitions: 3
+  replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: orders-payment-dlq
+  namespace: mini-order
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  topicName: orders.payment.dlq
+  partitions: 3
+  replicas: 2
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: orders-inventory-dlq
+  namespace: mini-order
+  labels:
+    strimzi.io/cluster: kafka
+spec:
+  topicName: orders.inventory.dlq
+  partitions: 3
+  replicas: 2

@@ -7,3 +7,11 @@ data:
   PORT: "8000"
   NODE_ENV: production
   LOG_LEVEL: info
+  KAFKA_BROKERS: kafka-kafka-bootstrap:9092
+  KAFKA_GROUP_ID: order-service
+  KAFKA_TOPIC_CREATED: orders.created
+  KAFKA_TOPIC_PAYMENT: orders.payment
+  KAFKA_TOPIC_INVENTORY: orders.inventory
+  KAFKA_TOPIC_CREATED_DLQ: orders.created.dlq
+  KAFKA_TOPIC_PAYMENT_DLQ: orders.payment.dlq
+  KAFKA_TOPIC_INVENTORY_DLQ: orders.inventory.dlq
