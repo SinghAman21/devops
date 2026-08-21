@@ -1,4 +1,3 @@
-const { randomUUID } = require('crypto');
 const { Router } = require('express');
 const { z } = require('zod');
 const { getDb } = require('./db');
@@ -22,67 +21,93 @@ const ALLOWED_STATUSES = [
 ];
 
 const createOrderSchema = z.object({
-  productId: z.string().uuid('productId must be a valid UUID'),
+  userId: z.number().int().positive('userId must be a positive integer'),
+  inventoryId: z.number().int().positive('inventoryId must be a positive integer'),
   quantity: z.number().int().positive('quantity must be a positive integer'),
-  customerId: z.string().uuid('customerId must be a valid UUID'),
 });
 
 const updateStatusSchema = z.object({
   status: z.enum(ALLOWED_STATUSES, { error: `status must be one of: ${ALLOWED_STATUSES.join(', ')}` }),
 });
 
-// POST /orders — create a new order in PENDING status.
+// POST /orders — capture an order using a user and inventory item.
 router.post('/', validate(createOrderSchema), async (req, res) => {
-  const { productId, quantity, customerId } = req.body;
-  const id = randomUUID();
-  const now = new Date();
+  const { userId, inventoryId, quantity } = req.body;
+  const db = getDb();
+  let client;
 
   try {
-    const db = getDb();
+    client = await db.connect();
+    await client.query('BEGIN');
 
-    const productCheck = await db.query('SELECT id FROM products WHERE id = $1', [productId]);
-    if (productCheck.rows.length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'INVALID_PRODUCT', message: 'Product not found' } });
+    const userResult = await client.query('SELECT id, balance FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    if (!userResult.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, error: { code: 'INVALID_USER', message: 'User not found' } });
     }
 
-    const customerCheck = await db.query('SELECT id FROM customers WHERE id = $1', [customerId]);
-    if (customerCheck.rows.length === 0) {
-      return res.status(400).json({ success: false, error: { code: 'INVALID_CUSTOMER', message: 'Customer not found' } });
-    }
-
-    const result = await db.query(
-      `INSERT INTO orders (id, product_id, quantity, customer_id, status, failure_reason, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING *`,
-      [id, productId, quantity, customerId, 'PENDING', null, now, now]
+    const inventoryResult = await client.query(
+      'SELECT inventory_id, name, quantity, cost FROM inventory WHERE inventory_id = $1 FOR UPDATE',
+      [inventoryId]
     );
+    if (!inventoryResult.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, error: { code: 'INVALID_INVENTORY', message: 'Inventory item not found' } });
+    }
+
+    const user = userResult.rows[0];
+    const item = inventoryResult.rows[0];
+    const totalCost = Number((Number(item.cost) * quantity).toFixed(2));
+
+    if (item.quantity < quantity) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, error: { code: 'INSUFFICIENT_INVENTORY', message: 'Not enough inventory available' } });
+    }
+    if (Number(user.balance) < totalCost) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, error: { code: 'INSUFFICIENT_BALANCE', message: 'User balance is too low' } });
+    }
+
+    const result = await client.query(
+      `INSERT INTO order_details (user_id, inventory_id, quantity, unit_cost, total_cost, status)
+       VALUES ($1, $2, $3, $4, $5, 'PENDING')
+       RETURNING *`,
+      [userId, inventoryId, quantity, item.cost, totalCost]
+    );
+    await client.query('UPDATE users SET balance = balance - $1, updated_at = NOW() WHERE id = $2', [totalCost, userId]);
+    await client.query('UPDATE inventory SET quantity = quantity - $1, updated_at = NOW() WHERE inventory_id = $2', [quantity, inventoryId]);
+    await client.query('COMMIT');
 
     const order = result.rows[0];
-
-    const event = createEvent(EVENT_TYPES.ORDER_CREATED, order.id, {
+    const event = createEvent(EVENT_TYPES.ORDER_CREATED, String(order.id), {
       orderId: order.id,
-      productId: order.product_id,
+      userId: order.user_id,
+      inventoryId: order.inventory_id,
       quantity: order.quantity,
-      customerId: order.customer_id,
+      totalCost: order.total_cost,
       status: order.status,
     });
-
     await produce(config.kafka.topics.orderCreated, event);
-    broadcast({ type: 'order_event', stage: 'created', orderId: id, timestamp: Date.now() });
-
-    logger.info({ requestId: req.requestId, orderId: id }, 'Order created and event published');
+    broadcast({ type: 'order_event', stage: 'created', orderId: order.id, timestamp: Date.now() });
     return res.status(201).json({ success: true, data: order });
   } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
     logger.error({ requestId: req.requestId, err }, 'Failed to create order');
     return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to create order' } });
+  } finally {
+    client?.release();
   }
 });
 
-// GET /orders — list all orders, newest first.
 router.get('/', async (req, res) => {
   try {
-    const db = getDb();
-    const result = await db.query('SELECT * FROM orders ORDER BY created_at DESC, id DESC');
+    const result = await getDb().query(
+      `SELECT o.*, u.name AS user_name, i.name AS inventory_name
+       FROM order_details o
+       JOIN users u ON u.id = o.user_id
+       JOIN inventory i ON i.inventory_id = o.inventory_id
+       ORDER BY o.created_at DESC, o.id DESC`
+    );
     return res.json({ success: true, data: result.rows, meta: { total: result.rowCount } });
   } catch (err) {
     logger.error({ requestId: req.requestId, err }, 'Failed to list orders');
@@ -90,14 +115,17 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /orders/:id — fetch a single order.
 router.get('/:id', async (req, res) => {
   try {
-    const db = getDb();
-    const result = await db.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } });
-    }
+    const result = await getDb().query(
+      `SELECT o.*, u.name AS user_name, i.name AS inventory_name
+       FROM order_details o
+       JOIN users u ON u.id = o.user_id
+       JOIN inventory i ON i.inventory_id = o.inventory_id
+       WHERE o.id = $1`,
+      [req.params.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } });
     return res.json({ success: true, data: result.rows[0] });
   } catch (err) {
     logger.error({ requestId: req.requestId, err, orderId: req.params.id }, 'Failed to get order');
@@ -105,33 +133,17 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// PATCH /orders/:id/status — manually set an order's status.
-// Temporary endpoint for local simulation before Kafka workers take over.
 router.patch('/:id/status', validate(updateStatusSchema), async (req, res) => {
-  const { status } = req.body;
-
   try {
-    const db = getDb();
-    const existing = await db.query('SELECT * FROM orders WHERE id = $1', [req.params.id]);
-    if (existing.rows.length === 0) {
-      return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } });
-    }
-
-    const updated = new Date();
-    const result = await db.query(
-      'UPDATE orders SET status = $1, updated_at = $2 WHERE id = $3 RETURNING *',
-      [status, updated, req.params.id]
+    const result = await getDb().query(
+      'UPDATE order_details SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [req.body.status, req.params.id]
     );
-
-    broadcast({
-      type: 'order_event',
-      stage: status === 'PAYMENT_COMPLETED' || status === 'PAYMENT_FAILED' ? 'payment' : status === 'INVENTORY_RESERVED' || status === 'INVENTORY_FAILED' ? 'inventory' : status === 'CONFIRMED' ? 'confirmed' : 'created',
-      orderId: req.params.id,
-      status,
-      timestamp: Date.now(),
-    });
-    logger.info({ requestId: req.requestId, orderId: req.params.id, status }, 'Order status updated');
-    return res.json({ success: true, data: result.rows[0] });
+    if (!result.rows.length) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Order not found' } });
+    const order = result.rows[0];
+    const stage = req.body.status.startsWith('PAYMENT_') ? 'payment' : req.body.status.startsWith('INVENTORY_') ? 'inventory' : req.body.status === 'CONFIRMED' ? 'confirmed' : 'created';
+    broadcast({ type: 'order_event', stage, orderId: order.id, status: order.status, timestamp: Date.now() });
+    return res.json({ success: true, data: order });
   } catch (err) {
     logger.error({ requestId: req.requestId, err, orderId: req.params.id }, 'Failed to update order status');
     return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to update order status' } });

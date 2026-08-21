@@ -1,4 +1,3 @@
-const { randomUUID } = require('crypto');
 
 const EVENT_TYPES = {
   ORDER_CREATED: 'ORDER_CREATED',
@@ -10,7 +9,7 @@ const EVENT_TYPES = {
 
 function createEvent(eventType, orderId, payload) {
   return {
-    eventId: randomUUID(),
+    eventId: `${orderId}-${Date.now()}`,
     eventType,
     orderId,
     payload,
