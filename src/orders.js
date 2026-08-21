@@ -4,6 +4,9 @@ const { z } = require('zod');
 const { getDb } = require('./db');
 const logger = require('./logger');
 const validate = require('./middleware/validate');
+const config = require('./config');
+const { produce } = require('./kafka');
+const { EVENT_TYPES, createEvent } = require('./events/schema');
 
 const router = Router();
 
@@ -53,8 +56,20 @@ router.post('/', validate(createOrderSchema), async (req, res) => {
       [id, productId, quantity, customerId, 'PENDING', null, now, now]
     );
 
-    logger.info({ requestId: req.requestId, orderId: id }, 'Order created');
-    return res.status(201).json({ success: true, data: result.rows[0] });
+    const order = result.rows[0];
+
+    const event = createEvent(EVENT_TYPES.ORDER_CREATED, order.id, {
+      orderId: order.id,
+      productId: order.product_id,
+      quantity: order.quantity,
+      customerId: order.customer_id,
+      status: order.status,
+    });
+
+    await produce(config.kafka.topics.orderCreated, event);
+
+    logger.info({ requestId: req.requestId, orderId: id }, 'Order created and event published');
+    return res.status(201).json({ success: true, data: order });
   } catch (err) {
     logger.error({ requestId: req.requestId, err }, 'Failed to create order');
     return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to create order' } });

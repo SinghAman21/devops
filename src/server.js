@@ -10,6 +10,7 @@ const errorHandler = require('./middleware/errorHandler');
 const { router: ordersRouter } = require('./orders');
 const { router: productsRouter } = require('./products');
 const { router: customersRouter } = require('./customers');
+const { connectProducer, disconnectProducer } = require('./kafka');
 
 const app = express();
 
@@ -62,6 +63,7 @@ app.use(errorHandler);
 async function shutdown(signal) {
   logger.info({ signal }, 'Received signal, shutting down gracefully');
   server.close(async () => {
+    await disconnectProducer();
     await closeDatabase();
     logger.info('HTTP server closed');
     process.exit(0);
@@ -79,7 +81,8 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 let server;
 
 initDatabase()
-  .then(() => {
+  .then(async () => {
+    await connectProducer();
     server = app.listen(config.port, () => {
       logger.info({ port: config.port, env: config.nodeEnv }, 'Server started');
     });

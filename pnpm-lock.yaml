@@ -20,6 +20,9 @@ importers:
       helmet:
         specifier: ^8.3.0
         version: 8.3.0
+      kafkajs:
+        specifier: ^2.2.4
+        version: 2.2.4
       pg:
         specifier: ^8.23.0
         version: 8.23.0
@@ -228,6 +231,10 @@ packages:
   joycon@3.1.1:
     resolution: {integrity: sha512-34wB/Y7MW7bzjKRjUKTa46I2Z7eV62Rkhva+KkopW7Qvv/OSWBqvkSY7vusOPrNuZcUG3tApvdVgNB8POj3SPw==}
     engines: {node: '>=10'}
+
+  kafkajs@2.2.4:
+    resolution: {integrity: sha512-j/YeapB1vfPT2iOIUn/vxdyKEuhuY2PxMBvf5JWux6iSaukAccrMtXEY/Lb7OvavDhOWME589bpLrEdnVHjfjA==}
+    engines: {node: '>=14.0.0'}
 
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
@@ -695,6 +702,8 @@ snapshots:
   ipaddr.js@1.9.1: {}
 
   joycon@3.1.1: {}
+
+  kafkajs@2.2.4: {}
 
   math-intrinsics@1.1.0: {}
 
