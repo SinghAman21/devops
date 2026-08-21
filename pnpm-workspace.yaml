@@ -1,3 +1,6 @@
+packages:
+  - dashboard
+
 allowBuilds:
   '3': true
   '-': true

@@ -11,6 +11,8 @@ const { router: ordersRouter } = require('./orders');
 const { router: productsRouter } = require('./products');
 const { router: customersRouter } = require('./customers');
 const { connectProducer, disconnectProducer } = require('./kafka');
+const { initWss, broadcast, closeWss } = require('./ws');
+const { getInfraSnapshot } = require('./infra');
 
 const app = express();
 
@@ -63,6 +65,7 @@ app.use(errorHandler);
 async function shutdown(signal) {
   logger.info({ signal }, 'Received signal, shutting down gracefully');
   server.close(async () => {
+    closeWss();
     await disconnectProducer();
     await closeDatabase();
     logger.info('HTTP server closed');
@@ -84,8 +87,17 @@ initDatabase()
   .then(async () => {
     await connectProducer();
     server = app.listen(config.port, () => {
+      initWss(server);
       logger.info({ port: config.port, env: config.nodeEnv }, 'Server started');
     });
+    setInterval(async () => {
+      try {
+        const snapshot = await getInfraSnapshot();
+        broadcast({ type: 'infra', data: snapshot });
+      } catch (err) {
+        logger.error({ err }, 'Failed to broadcast infra snapshot');
+      }
+    }, 5000);
   })
   .catch((err) => {
     logger.error({ err }, 'Failed to start server');

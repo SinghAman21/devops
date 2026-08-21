@@ -13,6 +13,7 @@ spec:
       labels:
         app: backend
     spec:
+      serviceAccountName: dashboard-observer
       containers:
         - name: backend
           image: amansingh21/mini-order-backend:latest

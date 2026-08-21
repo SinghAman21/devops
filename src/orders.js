@@ -7,6 +7,7 @@ const validate = require('./middleware/validate');
 const config = require('./config');
 const { produce } = require('./kafka');
 const { EVENT_TYPES, createEvent } = require('./events/schema');
+const { broadcast } = require('./ws');
 
 const router = Router();
 
@@ -67,6 +68,7 @@ router.post('/', validate(createOrderSchema), async (req, res) => {
     });
 
     await produce(config.kafka.topics.orderCreated, event);
+    broadcast({ type: 'order_event', stage: 'created', orderId: id, timestamp: Date.now() });
 
     logger.info({ requestId: req.requestId, orderId: id }, 'Order created and event published');
     return res.status(201).json({ success: true, data: order });
@@ -121,6 +123,13 @@ router.patch('/:id/status', validate(updateStatusSchema), async (req, res) => {
       [status, updated, req.params.id]
     );
 
+    broadcast({
+      type: 'order_event',
+      stage: status === 'PAYMENT_COMPLETED' || status === 'PAYMENT_FAILED' ? 'payment' : status === 'INVENTORY_RESERVED' || status === 'INVENTORY_FAILED' ? 'inventory' : status === 'CONFIRMED' ? 'confirmed' : 'created',
+      orderId: req.params.id,
+      status,
+      timestamp: Date.now(),
+    });
     logger.info({ requestId: req.requestId, orderId: req.params.id, status }, 'Order status updated');
     return res.json({ success: true, data: result.rows[0] });
   } catch (err) {
