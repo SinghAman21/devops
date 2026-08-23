@@ -16,7 +16,7 @@ spec:
       serviceAccountName: dashboard-observer
       containers:
         - name: backend
-          image: amansingh21/mini-order-backend:latest
+          image: amansingh21/mini-order-backend:schema-v3
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000

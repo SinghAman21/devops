@@ -9,18 +9,46 @@ const kafka = new Kafka({
 });
 
 const producer = kafka.producer();
+let producerConnected = false;
+let producerConnecting = null;
 
 async function connectProducer() {
-  await producer.connect();
-  logger.info({ brokers: config.kafka.brokers }, 'Kafka producer connected');
+  if (producerConnected) return true;
+  if (producerConnecting) return producerConnecting;
+
+  producerConnecting = producer.connect()
+    .then(() => {
+      producerConnected = true;
+      logger.info({ brokers: config.kafka.brokers }, 'Kafka producer connected');
+      return true;
+    })
+    .catch((err) => {
+      producerConnected = false;
+      throw err;
+    })
+    .finally(() => {
+      producerConnecting = null;
+    });
+
+  return producerConnecting;
 }
 
 async function disconnectProducer() {
+  if (!producerConnected) return;
   await producer.disconnect();
+  producerConnected = false;
   logger.info('Kafka producer disconnected');
 }
 
+function isProducerConnected() {
+  return producerConnected;
+}
+
 async function produce(topic, event) {
+  if (!producerConnected) {
+    await connectProducer();
+  }
+
   await producer.send({
     topic,
     messages: [
@@ -51,6 +79,7 @@ function createConsumer(groupIdSuffix) {
 module.exports = {
   connectProducer,
   disconnectProducer,
+  isProducerConnected,
   produce,
   createConsumer,
 };

@@ -85,7 +85,11 @@ let server;
 
 initDatabase()
   .then(async () => {
-    await connectProducer();
+    try {
+      await connectProducer();
+    } catch (err) {
+      logger.warn({ err, brokers: config.kafka.brokers }, 'Kafka unavailable during startup; HTTP server will start and retry on demand');
+    }
     server = app.listen(config.port, () => {
       initWss(server);
       logger.info({ port: config.port, env: config.nodeEnv }, 'Server started');
