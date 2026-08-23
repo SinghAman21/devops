@@ -10,6 +10,7 @@
     "dev:be": "node --watch src/server.js",
 
     "init-db": "node src/db.js",
+    "seed-db": "node src/seed.js",
     "worker": "node src/worker.js"
   },
   "keywords": [
