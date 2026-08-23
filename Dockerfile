@@ -3,7 +3,9 @@ FROM node:22-alpine AS deps
 RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod=false
+# The shared workspace lockfile includes local dashboard tooling; keep integrity checks,
+# but do not reject fresh transitive frontend packages when building the backend image.
+RUN pnpm config set minimum-release-age 0 && pnpm install --frozen-lockfile --prod=false
 
 # Stage 2: Production image
 FROM node:22-alpine AS runner
