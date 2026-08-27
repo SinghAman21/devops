@@ -30,53 +30,32 @@ const updateStatusSchema = z.object({
   status: z.enum(ALLOWED_STATUSES, { error: `status must be one of: ${ALLOWED_STATUSES.join(', ')}` }),
 });
 
-// POST /orders — capture an order using a user and inventory item.
 router.post('/', validate(createOrderSchema), async (req, res) => {
   const { userId, inventoryId, quantity } = req.body;
   const db = getDb();
-  let client;
 
   try {
-    client = await db.connect();
-    await client.query('BEGIN');
-
-    const userResult = await client.query('SELECT id, balance FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    const userResult = await db.query('SELECT id FROM users WHERE id = $1', [userId]);
     if (!userResult.rows.length) {
-      await client.query('ROLLBACK');
       return res.status(400).json({ success: false, error: { code: 'INVALID_USER', message: 'User not found' } });
     }
 
-    const inventoryResult = await client.query(
-      'SELECT inventory_id, name, quantity, cost FROM inventory WHERE inventory_id = $1 FOR UPDATE',
+    const inventoryResult = await db.query(
+      'SELECT inventory_id, cost FROM inventory WHERE inventory_id = $1',
       [inventoryId]
     );
     if (!inventoryResult.rows.length) {
-      await client.query('ROLLBACK');
       return res.status(400).json({ success: false, error: { code: 'INVALID_INVENTORY', message: 'Inventory item not found' } });
     }
 
-    const user = userResult.rows[0];
     const item = inventoryResult.rows[0];
     const totalCost = Number((Number(item.cost) * quantity).toFixed(2));
-
-    if (item.quantity < quantity) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ success: false, error: { code: 'INSUFFICIENT_INVENTORY', message: 'Not enough inventory available' } });
-    }
-    if (Number(user.balance) < totalCost) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ success: false, error: { code: 'INSUFFICIENT_BALANCE', message: 'User balance is too low' } });
-    }
-
-    const result = await client.query(
+    const result = await db.query(
       `INSERT INTO order_details (user_id, inventory_id, quantity, unit_cost, total_cost, status)
        VALUES ($1, $2, $3, $4, $5, 'PENDING')
        RETURNING *`,
       [userId, inventoryId, quantity, item.cost, totalCost]
     );
-    await client.query('UPDATE users SET balance = balance - $1, updated_at = NOW() WHERE id = $2', [totalCost, userId]);
-    await client.query('UPDATE inventory SET quantity = quantity - $1, updated_at = NOW() WHERE inventory_id = $2', [quantity, inventoryId]);
-    await client.query('COMMIT');
 
     const order = result.rows[0];
     const event = createEvent(EVENT_TYPES.ORDER_CREATED, String(order.id), {
@@ -89,13 +68,11 @@ router.post('/', validate(createOrderSchema), async (req, res) => {
     });
     await produce(config.kafka.topics.orderCreated, event);
     broadcast({ type: 'order_event', stage: 'created', orderId: order.id, timestamp: Date.now() });
+    logger.info({ requestId: req.requestId, orderId: order.id }, 'Order captured and creation event published');
     return res.status(201).json({ success: true, data: order });
   } catch (err) {
-    if (client) await client.query('ROLLBACK').catch(() => {});
     logger.error({ requestId: req.requestId, err }, 'Failed to create order');
     return res.status(500).json({ success: false, error: { code: 'DB_ERROR', message: 'Failed to create order' } });
-  } finally {
-    client?.release();
   }
 });
 

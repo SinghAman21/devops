@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-worker
+  namespace: mini-order
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventory-worker
+  template:
+    metadata:
+      labels:
+        app: inventory-worker
+    spec:
+      containers:
+        - name: inventory-worker
+          image: amansingh21/mini-order-backend:schema-v3
+          imagePullPolicy: IfNotPresent
+          command: ["node", "src/inventory-worker.js"]
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secret

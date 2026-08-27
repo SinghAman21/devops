@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-worker
+  namespace: mini-order
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-worker
+  template:
+    metadata:
+      labels:
+        app: payment-worker
+    spec:
+      containers:
+        - name: payment-worker
+          image: amansingh21/mini-order-backend:schema-v3
+          imagePullPolicy: IfNotPresent
+          command: ["node", "src/payment-worker.js"]
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secret

@@ -12,6 +12,9 @@ resources:
   - backend-secret.yaml
   - backend-deployment.yaml
   - backend-service.yaml
+  - payment-worker-deployment.yaml
+  - inventory-worker-deployment.yaml
+  - notification-worker-deployment.yaml
   - kafka-cluster.yaml
   - kafka-topics.yaml
   - kafka-ui.yaml
