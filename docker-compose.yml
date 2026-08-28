@@ -30,29 +30,16 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 10
-
-  api:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      PORT: 8000
-      DATABASE_URL: postgres://postgres:postgres@postgres:5432/mini_order
-      NODE_ENV: production
-      LOG_LEVEL: info
-      KAFKA_BROKERS: kafka:9092
-      KAFKA_CLIENT_ID: mini-order-api
-      KAFKA_GROUP_ID: order-workflow
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
 
 volumes:
   pgdata:

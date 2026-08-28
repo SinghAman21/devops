@@ -11,6 +11,8 @@ const kafka = new Kafka({
 const producer = kafka.producer();
 let producerConnected = false;
 let producerConnecting = null;
+let topicsEnsured = false;
+let topicsEnsuring = null;
 
 async function connectProducer() {
   if (producerConnected) return true;
@@ -70,6 +72,34 @@ async function produce(topic, event) {
   );
 }
 
+async function ensureTopics() {
+  if (topicsEnsured) return true;
+  if (topicsEnsuring) return topicsEnsuring;
+
+  topicsEnsuring = (async () => {
+    const admin = kafka.admin();
+    await admin.connect();
+    try {
+      await admin.createTopics({
+        waitForLeaders: true,
+        topics: [
+          { topic: config.kafka.topics.orderCreated, numPartitions: 1, replicationFactor: 1 },
+          { topic: config.kafka.topics.orderPayment, numPartitions: 1, replicationFactor: 1 },
+          { topic: config.kafka.topics.orderInventory, numPartitions: 1, replicationFactor: 1 },
+        ],
+      });
+      topicsEnsured = true;
+      logger.info({ topics: Object.values(config.kafka.topics) }, 'Kafka topics ensured');
+      return true;
+    } finally {
+      await admin.disconnect();
+      topicsEnsuring = null;
+    }
+  })();
+
+  return topicsEnsuring;
+}
+
 function createConsumer(groupIdSuffix) {
   return kafka.consumer({
     groupId: `${config.kafka.groupId}-${groupIdSuffix}`,
@@ -79,6 +109,7 @@ function createConsumer(groupIdSuffix) {
 module.exports = {
   connectProducer,
   disconnectProducer,
+  ensureTopics,
   isProducerConnected,
   produce,
   createConsumer,

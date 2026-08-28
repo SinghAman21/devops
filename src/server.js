@@ -10,9 +10,10 @@ const errorHandler = require('./middleware/errorHandler');
 const { router: ordersRouter } = require('./orders');
 const { router: usersRouter } = require('./users');
 const { router: inventoryRouter } = require('./inventory');
-const { connectProducer, disconnectProducer } = require('./kafka');
+const { connectProducer, disconnectProducer, ensureTopics } = require('./kafka');
 const { initWss, broadcast, closeWss } = require('./ws');
 const { getInfraSnapshot } = require('./infra');
+const { startDashboardConsumer } = require('./events/consumers/dashboard.consumer');
 
 const app = express();
 
@@ -66,6 +67,9 @@ async function shutdown(signal) {
   logger.info({ signal }, 'Received signal, shutting down gracefully');
   server.close(async () => {
     closeWss();
+    if (dashboardConsumer) {
+      await dashboardConsumer.disconnect();
+    }
     await disconnectProducer();
     await closeDatabase();
     logger.info('HTTP server closed');
@@ -82,16 +86,23 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 
 // Initialize DB and start server
 let server;
+let dashboardConsumer;
 
 initDatabase()
   .then(async () => {
     try {
       await connectProducer();
+      await ensureTopics();
     } catch (err) {
       logger.warn({ err, brokers: config.kafka.brokers }, 'Kafka unavailable during startup; HTTP server will start and retry on demand');
     }
-    server = app.listen(config.port, () => {
+    server = app.listen(config.port, async () => {
       initWss(server);
+      try {
+        dashboardConsumer = await startDashboardConsumer();
+      } catch (err) {
+        logger.warn({ err }, 'Dashboard Kafka relay unavailable during startup');
+      }
       logger.info({ port: config.port, env: config.nodeEnv }, 'Server started');
     });
     setInterval(async () => {

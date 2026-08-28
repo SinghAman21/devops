@@ -1,11 +1,13 @@
 const { initDatabase, closeDatabase } = require('./db');
 const logger = require('./logger');
+const { ensureTopics } = require('./kafka');
 const { startNotificationConsumer } = require('./events/consumers/notification.consumer');
 
 let consumer;
 
 async function start() {
   await initDatabase();
+  await ensureTopics();
   consumer = await startNotificationConsumer();
   logger.info('Notification worker started');
 }

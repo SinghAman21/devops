@@ -1,6 +1,6 @@
 const { initDatabase, closeDatabase } = require('./db');
 const logger = require('./logger');
-const { connectProducer, disconnectProducer } = require('./kafka');
+const { connectProducer, disconnectProducer, ensureTopics } = require('./kafka');
 const { startPaymentConsumer } = require('./events/consumers/payment.consumer');
 
 let consumer;
@@ -8,6 +8,7 @@ let consumer;
 async function start() {
   await initDatabase();
   await connectProducer();
+  await ensureTopics();
   consumer = await startPaymentConsumer();
   logger.info('Payment worker started');
 }
