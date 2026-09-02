@@ -1,7 +1,9 @@
 const logger = require('../../logger');
 const config = require('../../config');
 const { createConsumer } = require('../../kafka');
+const { getDb } = require('../../db');
 const { EVENT_TYPES } = require('../schema');
+const { claimEvent } = require('../idempotency');
 
 async function startNotificationConsumer() {
   const consumer = createConsumer('notification');
@@ -16,6 +18,22 @@ async function startNotificationConsumer() {
 
       const event = JSON.parse(value);
       const orderId = event.orderId;
+      const client = await getDb().connect();
+
+      try {
+        await client.query('BEGIN');
+        const claimed = await claimEvent(client, event);
+        await client.query('COMMIT');
+        if (!claimed) {
+          logger.info({ eventId: event.eventId, orderId }, 'Notification event already processed');
+          return;
+        }
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
 
       if (event.eventType === EVENT_TYPES.PAYMENT_FAILED) {
         logger.info({ topic, partition, orderId, status: 'PAYMENT_FAILED', reason: event.payload?.failureReason }, 'Notification worker: payment failed notification queued');

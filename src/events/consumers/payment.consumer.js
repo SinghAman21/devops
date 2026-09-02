@@ -3,6 +3,7 @@ const logger = require('../../logger');
 const config = require('../../config');
 const { produce, createConsumer } = require('../../kafka');
 const { EVENT_TYPES, createEvent } = require('../schema');
+const { claimEvent } = require('../idempotency');
 
 async function startPaymentConsumer() {
   const consumer = createConsumer('payment');
@@ -21,6 +22,13 @@ async function startPaymentConsumer() {
       const client = await db.connect();
       try {
         await client.query('BEGIN');
+        const claimed = await claimEvent(client, event);
+        if (!claimed) {
+          await client.query('ROLLBACK');
+          logger.info({ eventId: event.eventId, orderId: event.orderId }, 'Payment event already processed');
+          return;
+        }
+
         const orderResult = await client.query(
           `SELECT o.*, u.balance
            FROM order_details o

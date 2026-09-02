@@ -48,3 +48,13 @@ CREATE TABLE IF NOT EXISTS order_details (
 CREATE INDEX IF NOT EXISTS idx_order_details_created_at ON order_details (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_order_details_user_id ON order_details (user_id);
 CREATE INDEX IF NOT EXISTS idx_order_details_inventory_id ON order_details (inventory_id);
+
+-- Durable deduplication for Kafka consumers. A unique event ID makes retries safe.
+CREATE TABLE IF NOT EXISTS processed_events (
+    event_id     TEXT PRIMARY KEY,
+    event_type   VARCHAR(100),
+    order_id     BIGINT,
+    processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_processed_events_order_id ON processed_events (order_id);
